@@ -113,10 +113,11 @@ def do_import(sheet, model_form, field_assignment, default_values, commit=False)
     forward_choices = {}
     reverse_choices = {}
     for k, v in field_assignment.items():
-        field = form_instance.fields[v]
-        if hasattr(field, 'choices'):
-            forward_choices[k] = choice_dict = dict(field.choices)
-            reverse_choices[k] = dict((r[1], r[0]) for r in choice_dict.items())
+        if v != u'id':
+            field = form_instance.fields[v]
+            if hasattr(field, 'choices'):
+                forward_choices[k] = choice_dict = dict(field.choices)
+                reverse_choices[k] = dict((r[1], r[0]) for r in choice_dict.items())
 
     for i in range(1, sheet.nrows):
         data = default_values.copy()
@@ -124,33 +125,39 @@ def do_import(sheet, model_form, field_assignment, default_values, commit=False)
         values = sheet.row_values(i)
 
         for k, v in field_assignment.items():
-            field = form_instance.fields[v]
-            value = values[int(k)]
+            if v != u'id':
+                field = form_instance.fields[v]
+                value = values[int(k)]
 
-            # Normalize values a little bit -- this is necessary because when
-            # reading from the excel file, we only get a subset of the types
-            # Django itself supports through its forms and models.
-            if isinstance(value, float):
-                if value - int(value) == 0.0:
-                    value = int(value)
-            elif isinstance(value, basestring):
-                value = value.strip()
+                # Normalize values a little bit -- this is necessary because when
+                # reading from the excel file, we only get a subset of the types
+                # Django itself supports through its forms and models.
+                if isinstance(value, float):
+                    if value - int(value) == 0.0:
+                        value = int(value)
+                elif isinstance(value, basestring):
+                    value = value.strip()
 
-            if k in forward_choices:
-                if value in forward_choices[k]:
-                    pass  # Ok.
-                else:
-                    if value in reverse_choices[k]:
-                        value = reverse_choices[k][value]
+                if k in forward_choices:
+                    if value in forward_choices[k]:
+                        pass  # Ok.
                     else:
-                        errors.append((
-                            values,
-                            ErrorDict((
-                                (v, ErrorList(["Could not assign value %s" % value])),
+                        if value in reverse_choices[k]:
+                            value = reverse_choices[k][value]
+                        else:
+                            errors.append((
+                                values,
+                                ErrorDict((
+                                    (v, ErrorList(["Could not assign value %s" % value])),
+                                    ))
                                 ))
-                            ))
 
-            data[v] = value
+                data[v] = value
+
+        pk = values[0]
+        if pk != '':
+            if int(pk) > 0:
+                form.instance.pk = unicode(int(pk))
 
         form = model_form(data)
         if form.is_valid():
